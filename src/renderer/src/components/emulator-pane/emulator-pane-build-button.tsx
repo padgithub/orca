@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, Zap } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 interface EmulatorPaneBuildButtonProps {
   worktreeId: string
@@ -24,7 +25,7 @@ export function EmulatorPaneBuildButton({
   const [isBuilding, setIsBuilding] = useState(false)
   const [buildMessage, setBuildMessage] = useState<string | null>(null)
 
-  const handleBuildAndRun = async () => {
+  const handleBuildAndRun = useCallback(async () => {
     if (!deviceId) {
       setBuildMessage('No device selected')
       return
@@ -36,39 +37,36 @@ export function EmulatorPaneBuildButton({
 
     try {
       // Call RPC to build and run
-      const response = await fetch('/api/rpc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method: 'emulator.build-and-run',
-          params: {
-            worktreeId,
-            deviceId,
-            platform: devicePlatform
-          }
-        })
+      const result = await callRuntimeRpc('emulator.build-and-run', {
+        worktreeId,
+        deviceId,
+        platform: devicePlatform
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        setBuildMessage(`Error: ${error.error || 'Build failed'}`)
-        return
+      if (result && typeof result === 'object') {
+        const buildResult = result as { success?: boolean; message?: string; error?: string }
+        if (buildResult.success) {
+          setBuildMessage(buildResult.message || 'Build complete!')
+          onBuildComplete?.()
+          // Auto-dismiss after 3 seconds
+          setTimeout(() => {
+            setBuildMessage(null)
+          }, 3000)
+        } else {
+          setBuildMessage(`Error: ${buildResult.error || buildResult.message || 'Build failed'}`)
+        }
+      } else {
+        setBuildMessage('Build complete!')
+        onBuildComplete?.()
       }
-
-      const result = await response.json()
-      setBuildMessage(result.message || 'Build complete!')
-      onBuildComplete?.()
-
-      // Auto-dismiss after 3 seconds
-      setTimeout(() => {
-        setBuildMessage(null)
-      }, 3000)
     } catch (error) {
-      setBuildMessage(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      setBuildMessage(`Error: ${errorMsg}`)
+      console.error('Build failed:', error)
     } finally {
       setIsBuilding(false)
     }
-  }
+  }, [deviceId, devicePlatform, worktreeId, onBuildStart, onBuildComplete])
 
   return (
     <div className="flex flex-col gap-2">
@@ -78,19 +76,22 @@ export function EmulatorPaneBuildButton({
         disabled={disabled || isBuilding || !deviceId}
         onClick={handleBuildAndRun}
         className="gap-2"
+        title="Build project and run on selected device"
       >
         {isBuilding ? (
           <Loader2 className="size-3.5 animate-spin" />
         ) : (
           <Zap className="size-3.5" />
         )}
-        {isBuilding
-          ? translate('auto.components.emulator.pane.build.building', 'Building…')
-          : translate('auto.components.emulator.pane.build.button', 'Build & Run')}
+        <span className="hidden sm:inline">
+          {isBuilding
+            ? translate('auto.components.emulator.pane.build.building', 'Building…')
+            : translate('auto.components.emulator.pane.build.button', 'Build & Run')}
+        </span>
       </Button>
       {buildMessage && (
         <p className={cn(
-          'text-xs',
+          'text-xs px-1',
           buildMessage.startsWith('Error') ? 'text-destructive' : 'text-muted-foreground'
         )}>
           {buildMessage}
