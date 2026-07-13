@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 import { translate } from '@/i18n/i18n'
+import { EmulatorPaneBuildButton } from './emulator-pane-build-button'
 
 type EmulatorPaneToolbarProps = {
   displayName: string
@@ -18,6 +19,7 @@ type EmulatorPaneToolbarProps = {
   loading: boolean
   devices: SimulatorDeviceRow[]
   selectedUdid: string | null
+  worktreeId: string
   onSelectDevice: (udid: string) => void
   onAttach: () => void
   onShutdown: () => void
@@ -31,6 +33,7 @@ export function EmulatorPaneToolbar({
   loading,
   devices,
   selectedUdid,
+  worktreeId,
   onSelectDevice,
   onAttach,
   onShutdown,
@@ -44,6 +47,10 @@ export function EmulatorPaneToolbar({
   const statusClassName = subtleStatus
     ? 'text-muted-foreground'
     : 'border-border bg-muted text-muted-foreground'
+
+  // Get selected device info
+  const selectedDevice = devices.find((d) => d.udid === selectedUdid)
+  const devicePlatform = selectedDevice?.platform === 'ios' ? 'ios' : 'android'
 
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -80,6 +87,17 @@ export function EmulatorPaneToolbar({
           ))}
         </SelectContent>
       </Select>
+
+      {/* Build & Run Button - NEW */}
+      {isLive && selectedUdid && (
+        <EmulatorPaneBuildButton
+          worktreeId={worktreeId}
+          deviceId={selectedUdid}
+          devicePlatform={devicePlatform}
+          disabled={loading}
+        />
+      )}
+
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
